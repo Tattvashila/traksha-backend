@@ -12,7 +12,7 @@ app.use(express.json());
 // =========================
 // 🚨 ENV SAFETY CHECK (CRITICAL)
 // =========================
-if (!process.env.MONGO_URI) {
+if (MONGO_URI) {
   console.error("❌ MONGO_URI missing");
   process.exit(1); // HARD STOP (prevents crash loop)
 }
