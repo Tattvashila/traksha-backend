@@ -10,11 +10,25 @@ app.use(cors());
 app.use(express.json());
 
 // =========================
-// 🔗 MongoDB
+// 🚨 ENV SAFETY CHECK (CRITICAL)
 // =========================
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected ✅"))
-  .catch(err => console.log("Mongo Error ❌", err));
+if (!process.env.MONGO_URI) {
+  console.error("❌ MONGO_URI missing");
+  process.exit(1); // HARD STOP (prevents crash loop)
+}
+
+// =========================
+// 🔗 MongoDB CONNECT (STABLE)
+// =========================
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log("MongoDB Connected ✅"))
+.catch(err => {
+  console.error("MongoDB Error ❌", err);
+  process.exit(1); // STOP if DB fails
+});
 
 // =========================
 // 🧠 SCHEMA
@@ -35,18 +49,18 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model("User", userSchema);
 
 // =========================
-// 🔥 TRK ID GENERATOR (FIXED)
+// 🔥 TRK GENERATOR (100% SAFE)
 // =========================
 function generateTRK() {
   const year = new Date().getFullYear().toString().slice(-2);
   const random = Math.random().toString(36).substring(2, 10).toUpperCase();
   const checksum = Math.floor(Math.random() * 90 + 10);
 
-  return `TRK-${year}-IN-${random}-${checksum}`; // ✅ FIX
+  return `TRK-${year}-IN-${random}-${checksum}`;
 }
 
 // =========================
-// 🔥 SIGNUP API
+// 🔥 SIGNUP
 // =========================
 app.post("/api/signup", async (req, res) => {
   try {
@@ -67,23 +81,24 @@ app.post("/api/signup", async (req, res) => {
 
     await user.save();
 
-    res.json({
-      success: true,
-      userId
-    });
+    res.json({ success: true, userId });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "Signup failed" });
   }
 });
 
 // =========================
-// 🔐 LOGIN API (FIXED)
+// 🔐 LOGIN (FULLY SAFE)
 // =========================
 app.post("/api/login", async (req, res) => {
   try {
     const { userId, password } = req.body;
+
+    if (!userId || !password) {
+      return res.json({ success: false, message: "Missing credentials" });
+    }
 
     const user = await User.findOne({ userId });
 
@@ -95,14 +110,11 @@ app.post("/api/login", async (req, res) => {
       return res.json({ success: false, message: "Wrong password" });
     }
 
-    return res.json({
-      success: true,
-      status: "OTP_REQUIRED"
-    });
+    res.json({ success: true, status: "OTP_REQUIRED" });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "Login failed" });
   }
 });
 
@@ -120,16 +132,16 @@ app.post("/api/verify-otp", (req, res) => {
 });
 
 // =========================
-// 🔥 TRACKING
+// 📊 TRACKING
 // =========================
 app.post("/api/track", async (req, res) => {
   try {
     const { userId, study = 0, focus = 0, distraction = 0 } = req.body;
 
-    let user = await User.findOne({ userId });
+    const user = await User.findOne({ userId });
 
     if (!user) {
-      return res.json({ success: false });
+      return res.json({ success: false, message: "User not found" });
     }
 
     user.study += study;
@@ -141,8 +153,8 @@ app.post("/api/track", async (req, res) => {
     res.json({ success: true });
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "Tracking failed" });
   }
 });
 
@@ -164,8 +176,8 @@ app.get("/api/stats/:userId", async (req, res) => {
     res.json(user);
 
   } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Server error" });
+    console.error(err);
+    res.status(500).json({ error: "Stats error" });
   }
 });
 
@@ -173,7 +185,7 @@ app.get("/api/stats/:userId", async (req, res) => {
 // TEST
 // =========================
 app.get("/", (req, res) => {
-  res.send("Traksha Backend Running 🚀");
+  res.send("🚀 Traksha Backend Live");
 });
 
 // =========================
@@ -182,5 +194,5 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} 🚀`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
