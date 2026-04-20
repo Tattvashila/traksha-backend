@@ -2,7 +2,6 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import bcrypt from "bcrypt";
 
 dotenv.config();
 
@@ -11,14 +10,20 @@ app.use(cors());
 app.use(express.json());
 
 // =========================
-// 🔗 MongoDB
+// 🔗 MongoDB CONNECT
 // =========================
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected ✅"))
-  .catch(err => console.log(err));
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log("MongoDB Connected ✅"))
+.catch(err => {
+  console.log("Mongo Error ❌", err);
+  process.exit(1);
+});
 
 // =========================
-// 🧠 SCHEMA
+// 🧠 USER SCHEMA
 // =========================
 const userSchema = new mongoose.Schema({
   userId: { type: String, unique: true },
@@ -46,7 +51,7 @@ function generateTRK() {
 }
 
 // =========================
-// 🔥 SIGNUP API
+// 🔥 SIGNUP
 // =========================
 app.post("/api/signup", async (req, res) => {
   try {
@@ -56,7 +61,6 @@ app.post("/api/signup", async (req, res) => {
       return res.json({ success: false, message: "Missing fields" });
     }
 
-    // 🔥 DUPLICATE CHECK
     const existing = await User.findOne({
       $or: [{ phone }, { email }]
     });
@@ -70,14 +74,11 @@ app.post("/api/signup", async (req, res) => {
 
     const userId = generateTRK();
 
-    // 🔥 HASH PASSWORD
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const user = new User({
       userId,
       phone,
       email,
-      password: hashedPassword
+      password // plain (stable MVP)
     });
 
     await user.save();
@@ -88,17 +89,15 @@ app.post("/api/signup", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
+    console.log("Signup Error ❌", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =========================
-// 🔐 LOGIN API
+// 🔐 LOGIN
 // =========================
 app.post("/api/login", async (req, res) => {
-  console.log("LOGIN HIT 🔥", req.body);
-
   try {
     const { userId, password } = req.body;
 
@@ -118,23 +117,20 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
-    // 🔥 PASSWORD CHECK
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
+    if (user.password !== password) {
       return res.json({
         success: false,
         message: "Wrong password"
       });
     }
 
-    return res.json({
+    res.json({
       success: true,
       status: "OTP_REQUIRED"
     });
 
   } catch (err) {
-    console.log(err);
+    console.log("Login Error ❌", err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -146,23 +142,23 @@ app.post("/api/verify-otp", (req, res) => {
   const { otp } = req.body;
 
   if (otp === 1234) {
-    res.json({ success: true });
-  } else {
-    res.json({ success: false });
+    return res.json({ success: true });
   }
+
+  res.json({ success: false });
 });
 
 // =========================
-// 🔥 TRACKING
+// 🔥 TRACK ACTIVITY
 // =========================
 app.post("/api/track", async (req, res) => {
   try {
     const { userId, study = 0, focus = 0, distraction = 0 } = req.body;
 
-    let user = await User.findOne({ userId });
+    const user = await User.findOne({ userId });
 
     if (!user) {
-      return res.json({ success: false });
+      return res.json({ success: false, message: "User not found" });
     }
 
     user.study += study;
@@ -174,13 +170,13 @@ app.post("/api/track", async (req, res) => {
     res.json({ success: true });
 
   } catch (err) {
-    console.log(err);
+    console.log("Track Error ❌", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =========================
-// 📊 STATS
+// 📊 GET STATS
 // =========================
 app.get("/api/stats/:userId", async (req, res) => {
   try {
@@ -194,7 +190,6 @@ app.get("/api/stats/:userId", async (req, res) => {
       });
     }
 
-    // 🔥 SAFE RESPONSE (NO PASSWORD)
     res.json({
       study: user.study,
       focus: user.focus,
@@ -202,20 +197,23 @@ app.get("/api/stats/:userId", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
+    console.log("Stats Error ❌", err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
 // =========================
-// TEST
+// 🧪 HEALTH CHECK
 // =========================
 app.get("/", (req, res) => {
   res.send("Traksha Backend Running 🚀");
 });
 
+// =========================
+// 🚀 SERVER START
+// =========================
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log("Server running...");
+  console.log(`Server running on ${PORT}`);
 });
