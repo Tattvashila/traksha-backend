@@ -10,25 +10,21 @@ app.use(cors());
 app.use(express.json());
 
 // =========================
-// 🚨 ENV SAFETY CHECK (CRITICAL)
+// 🔗 MongoDB (FINAL FIX)
 // =========================
-if (MONGO_URI) {
-  console.error("❌ MONGO_URI missing");
-  process.exit(1); // HARD STOP (prevents crash loop)
+const MONGO_URL = process.env.MONGO_URL;
+
+if (!MONGO_URL) {
+  console.error("❌ MONGO_URL missing in ENV");
+  process.exit(1);
 }
 
-// =========================
-// 🔗 MongoDB CONNECT (STABLE)
-// =========================
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log("MongoDB Connected ✅"))
-.catch(err => {
-  console.error("MongoDB Error ❌", err);
-  process.exit(1); // STOP if DB fails
-});
+mongoose.connect(MONGO_URL)
+  .then(() => console.log("MongoDB Connected ✅"))
+  .catch(err => {
+    console.error("Mongo Error ❌", err);
+    process.exit(1);
+  });
 
 // =========================
 // 🧠 SCHEMA
@@ -49,7 +45,7 @@ const userSchema = new mongoose.Schema({
 const User = mongoose.model("User", userSchema);
 
 // =========================
-// 🔥 TRK GENERATOR (100% SAFE)
+// 🔥 TRK ID GENERATOR
 // =========================
 function generateTRK() {
   const year = new Date().getFullYear().toString().slice(-2);
@@ -85,20 +81,16 @@ app.post("/api/signup", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Signup failed" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 // =========================
-// 🔐 LOGIN (FULLY SAFE)
+// 🔐 LOGIN
 // =========================
 app.post("/api/login", async (req, res) => {
   try {
     const { userId, password } = req.body;
-
-    if (!userId || !password) {
-      return res.json({ success: false, message: "Missing credentials" });
-    }
 
     const user = await User.findOne({ userId });
 
@@ -114,7 +106,7 @@ app.post("/api/login", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Login failed" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -123,16 +115,11 @@ app.post("/api/login", async (req, res) => {
 // =========================
 app.post("/api/verify-otp", (req, res) => {
   const { otp } = req.body;
-
-  if (otp === 1234) {
-    res.json({ success: true });
-  } else {
-    res.json({ success: false });
-  }
+  res.json({ success: otp === 1234 });
 });
 
 // =========================
-// 📊 TRACKING
+// 🔥 TRACK
 // =========================
 app.post("/api/track", async (req, res) => {
   try {
@@ -141,7 +128,7 @@ app.post("/api/track", async (req, res) => {
     const user = await User.findOne({ userId });
 
     if (!user) {
-      return res.json({ success: false, message: "User not found" });
+      return res.json({ success: false });
     }
 
     user.study += study;
@@ -154,7 +141,7 @@ app.post("/api/track", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Tracking failed" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -177,7 +164,7 @@ app.get("/api/stats/:userId", async (req, res) => {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Stats error" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -185,7 +172,7 @@ app.get("/api/stats/:userId", async (req, res) => {
 // TEST
 // =========================
 app.get("/", (req, res) => {
-  res.send("🚀 Traksha Backend Live");
+  res.send("Traksha Backend Running 🚀");
 });
 
 // =========================
@@ -194,5 +181,5 @@ app.get("/", (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} 🚀`);
 });
