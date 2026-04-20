@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import bcrypt from "bcrypt";
 
 dotenv.config();
 
@@ -9,13 +10,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// =========================
 // 🔗 MongoDB
+// =========================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected ✅"))
   .catch(err => console.log(err));
 
 // =========================
-// 🧠 SCHEMA (UPGRADED)
+// 🧠 SCHEMA
 // =========================
 const userSchema = new mongoose.Schema({
   userId: { type: String, unique: true },
@@ -37,11 +40,8 @@ const User = mongoose.model("User", userSchema);
 // =========================
 function generateTRK() {
   const year = new Date().getFullYear().toString().slice(-2);
-
   const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-
   const checksum = Math.floor(Math.random() * 90 + 10);
-
   return `TRK-${year}-IN-${random}-${checksum}`;
 }
 
@@ -56,13 +56,28 @@ app.post("/api/signup", async (req, res) => {
       return res.json({ success: false, message: "Missing fields" });
     }
 
+    // 🔥 DUPLICATE CHECK
+    const existing = await User.findOne({
+      $or: [{ phone }, { email }]
+    });
+
+    if (existing) {
+      return res.json({
+        success: false,
+        message: "User already exists"
+      });
+    }
+
     const userId = generateTRK();
+
+    // 🔥 HASH PASSWORD
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
       userId,
       phone,
       email,
-      password
+      password: hashedPassword
     });
 
     await user.save();
@@ -79,29 +94,53 @@ app.post("/api/signup", async (req, res) => {
 });
 
 // =========================
-// 🔐 LOGIN API (REAL)
+// 🔐 LOGIN API
 // =========================
 app.post("/api/login", async (req, res) => {
-  const { userId, password } = req.body;
+  console.log("LOGIN HIT 🔥", req.body);
 
-  const user = await User.findOne({ userId });
+  try {
+    const { userId, password } = req.body;
 
-  if (!user) {
-    return res.json({ success: false, message: "User not found" });
+    if (!userId || !password) {
+      return res.json({
+        success: false,
+        message: "Missing credentials"
+      });
+    }
+
+    const user = await User.findOne({ userId });
+
+    if (!user) {
+      return res.json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // 🔥 PASSWORD CHECK
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.json({
+        success: false,
+        message: "Wrong password"
+      });
+    }
+
+    return res.json({
+      success: true,
+      status: "OTP_REQUIRED"
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
   }
-
-  if (user.password !== password) {
-    return res.json({ success: false, message: "Wrong password" });
-  }
-
-  return res.json({
-    success: true,
-    status: "OTP_REQUIRED"
-  });
 });
 
 // =========================
-// 🔐 OTP
+// 🔐 OTP (DEMO)
 // =========================
 app.post("/api/verify-otp", (req, res) => {
   const { otp } = req.body;
@@ -134,7 +173,8 @@ app.post("/api/track", async (req, res) => {
 
     res.json({ success: true });
 
-  } catch {
+  } catch (err) {
+    console.log(err);
     res.status(500).json({ error: "Server error" });
   }
 });
@@ -143,17 +183,28 @@ app.post("/api/track", async (req, res) => {
 // 📊 STATS
 // =========================
 app.get("/api/stats/:userId", async (req, res) => {
-  const user = await User.findOne({ userId: req.params.userId });
+  try {
+    const user = await User.findOne({ userId: req.params.userId });
 
-  if (!user) {
-    return res.json({
-      study: 0,
-      focus: 0,
-      distraction: 0
+    if (!user) {
+      return res.json({
+        study: 0,
+        focus: 0,
+        distraction: 0
+      });
+    }
+
+    // 🔥 SAFE RESPONSE (NO PASSWORD)
+    res.json({
+      study: user.study,
+      focus: user.focus,
+      distraction: user.distraction
     });
-  }
 
-  res.json(user);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =========================
