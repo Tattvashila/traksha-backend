@@ -9,295 +9,178 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// =========================
 // 🔗 MongoDB
+// =========================
 mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log("MongoDB Connected ✅"))
-.catch(err => console.log(err));
+  .then(() => console.log("MongoDB Connected ✅"))
+  .catch(err => console.log("Mongo Error ❌", err));
 
 // =========================
-// 🧠 SCHEMA (UPGRADED)
+// 🧠 SCHEMA
 // =========================
 const userSchema = new mongoose.Schema({
-userId: { type: String, unique: true },
-password: String,
-phone: String,
-email: String,
+  userId: { type: String, unique: true },
+  password: String,
+  phone: String,
+  email: String,
 
-study: { type: Number, default: 0 },
-focus: { type: Number, default: 0 },
-distraction: { type: Number, default: 0 },
+  study: { type: Number, default: 0 },
+  focus: { type: Number, default: 0 },
+  distraction: { type: Number, default: 0 },
 
-createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now }
 });
 
 const User = mongoose.model("User", userSchema);
 
 // =========================
-// 🔥 TRK ID GENERATOR
+// 🔥 TRK ID GENERATOR (FIXED)
 // =========================
 function generateTRK() {
-const year = new Date().getFullYear().toString().slice(-2);
+  const year = new Date().getFullYear().toString().slice(-2);
+  const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+  const checksum = Math.floor(Math.random() * 90 + 10);
 
-const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-
-const checksum = Math.floor(Math.random() * 90 + 10);
-
-return TRK-${year}-IN-${random}-${checksum};
+  return `TRK-${year}-IN-${random}-${checksum}`; // ✅ FIX
 }
 
 // =========================
 // 🔥 SIGNUP API
 // =========================
 app.post("/api/signup", async (req, res) => {
-try {
-const { phone, email, password } = req.body;
+  try {
+    const { phone, email, password } = req.body;
 
-if (!phone || !email || !password) {  
-  return res.json({ success: false, message: "Missing fields" });  
-}  
+    if (!phone || !email || !password) {
+      return res.json({ success: false, message: "Missing fields" });
+    }
 
-const userId = generateTRK();  
+    const userId = generateTRK();
 
-const user = new User({  
-  userId,  
-  phone,  
-  email,  
-  password  
-});  
+    const user = new User({
+      userId,
+      phone,
+      email,
+      password
+    });
 
-await user.save();  
+    await user.save();
 
-res.json({  
-  success: true,  
-  userId  
-});
+    res.json({
+      success: true,
+      userId
+    });
 
-} catch (err) {
-console.log(err);
-res.status(500).json({ error: "Server error" });
-}
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =========================
-// 🔐 LOGIN API (REAL)
+// 🔐 LOGIN API (FIXED)
 // =========================
 app.post("/api/login", async (req, res) => {
-console.log("LOGIN HIT 🔥", req.body);
+  try {
+    const { userId, password } = req.body;
 
-const user = await User.findOne({ userId });
+    const user = await User.findOne({ userId });
 
-if (!user) {
-return res.json({ success: false, message: "User not found" });
-}
+    if (!user) {
+      return res.json({ success: false, message: "User not found" });
+    }
 
-if (user.password !== password) {
-return res.json({ success: false, message: "Wrong password" });
-}
+    if (user.password !== password) {
+      return res.json({ success: false, message: "Wrong password" });
+    }
 
-return res.json({
-success: true,
-status: "OTP_REQUIRED"
-});
+    return res.json({
+      success: true,
+      status: "OTP_REQUIRED"
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =========================
 // 🔐 OTP
 // =========================
 app.post("/api/verify-otp", (req, res) => {
-const { otp } = req.body;
+  const { otp } = req.body;
 
-if (otp === 1234) {
-res.json({ success: true });
-} else {
-res.json({ success: false });
-}
+  if (otp === 1234) {
+    res.json({ success: true });
+  } else {
+    res.json({ success: false });
+  }
 });
 
 // =========================
 // 🔥 TRACKING
 // =========================
 app.post("/api/track", async (req, res) => {
-try {
-const { userId, study = 0, focus = 0, distraction = 0 } = req.body;
+  try {
+    const { userId, study = 0, focus = 0, distraction = 0 } = req.body;
 
-let user = await User.findOne({ userId });  
+    let user = await User.findOne({ userId });
 
-if (!user) {  
-  return res.json({ success: false });  
-}  
+    if (!user) {
+      return res.json({ success: false });
+    }
 
-user.study += study;  
-user.focus += focus;  
-user.distraction += distraction;  
+    user.study += study;
+    user.focus += focus;
+    user.distraction += distraction;
 
-await user.save();  
+    await user.save();
 
-res.json({ success: true });
+    res.json({ success: true });
 
-} catch {
-res.status(500).json({ error: "Server error" });
-}
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =========================
 // 📊 STATS
 // =========================
 app.get("/api/stats/:userId", async (req, res) => {
-const user = await User.findOne({ userId: req.params.userId });
+  try {
+    const user = await User.findOne({ userId: req.params.userId });
 
-if (!user) {
-return res.json({
-study: 0,
-focus: 0,
-distraction: 0
-});
-}
+    if (!user) {
+      return res.json({
+        study: 0,
+        focus: 0,
+        distraction: 0
+      });
+    }
 
-res.json(user);
-});
+    res.json(user);
 
-// =========================
-// TEST
-// =========================
-app.get("/", (req, res) => {
-res.send("Traksha Backend Running 🚀");
-});
-
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-console.log("Server running...");
-});// =========================
-function generateTRK() {
-const year = new Date().getFullYear().toString().slice(-2);
-
-const random = Math.random().toString(36).substring(2, 10).toUpperCase();
-
-const checksum = Math.floor(Math.random() * 90 + 10);
-
-return TRK-${year}-IN-${random}-${checksum};
-}
-
-// =========================
-// 🔥 SIGNUP API
-// =========================
-app.post("/api/signup", async (req, res) => {
-try {
-const { phone, email, password } = req.body;
-
-if (!phone || !email || !password) {  
-  return res.json({ success: false, message: "Missing fields" });  
-}  
-
-const userId = generateTRK();  
-
-const user = new User({  
-  userId,  
-  phone,  
-  email,  
-  password  
-});  
-
-await user.save();  
-
-res.json({  
-  success: true,  
-  userId  
-});
-
-} catch (err) {
-console.log(err);
-res.status(500).json({ error: "Server error" });
-}
-});
-
-// =========================
-// 🔐 LOGIN API (REAL)
-// =========================
-app.post("/api/login", async (req, res) => {
-console.log("LOGIN HIT 🔥", req.body);
-
-const user = await User.findOne({ userId });
-
-if (!user) {
-return res.json({ success: false, message: "User not found" });
-}
-
-if (user.password !== password) {
-return res.json({ success: false, message: "Wrong password" });
-}
-
-return res.json({
-success: true,
-status: "OTP_REQUIRED"
-});
-});
-
-// =========================
-// 🔐 OTP
-// =========================
-app.post("/api/verify-otp", (req, res) => {
-const { otp } = req.body;
-
-if (otp === 1234) {
-res.json({ success: true });
-} else {
-res.json({ success: false });
-}
-});
-
-// =========================
-// 🔥 TRACKING
-// =========================
-app.post("/api/track", async (req, res) => {
-try {
-const { userId, study = 0, focus = 0, distraction = 0 } = req.body;
-
-let user = await User.findOne({ userId });  
-
-if (!user) {  
-  return res.json({ success: false });  
-}  
-
-user.study += study;  
-user.focus += focus;  
-user.distraction += distraction;  
-
-await user.save();  
-
-res.json({ success: true });
-
-} catch {
-res.status(500).json({ error: "Server error" });
-}
-});
-
-// =========================
-// 📊 STATS
-// =========================
-app.get("/api/stats/:userId", async (req, res) => {
-const user = await User.findOne({ userId: req.params.userId });
-
-if (!user) {
-return res.json({
-study: 0,
-focus: 0,
-distraction: 0
-});
-}
-
-res.json(user);
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 // =========================
 // TEST
 // =========================
 app.get("/", (req, res) => {
-res.send("Traksha Backend Running 🚀");
+  res.send("Traksha Backend Running 🚀");
 });
 
+// =========================
+// 🚀 SERVER
+// =========================
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-console.log("Server running...");
+  console.log(`Server running on port ${PORT} 🚀`);
 });
